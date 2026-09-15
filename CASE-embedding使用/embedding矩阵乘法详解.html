@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Embedding Query和Chunk矩阵乘法详解</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <style>
+        body {
+            font-family: 'Microsoft YaHei', Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        h1 {
+            color: #2c3e50;
+            border-bottom: 3px solid #3498db;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #34495e;
+            margin-top: 30px;
+        }
+        .code-block {
+            background-color: #f8f9fa;
+            border-left: 4px solid #3498db;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 5px;
+            font-family: 'Consolas', 'Monaco', monospace;
+        }
+        .matrix-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 30px 0;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+        .matrix {
+            background-color: #ecf0f1;
+            padding: 15px;
+            border-radius: 8px;
+            border: 2px solid #3498db;
+        }
+        .matrix-label {
+            text-align: center;
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #2c3e50;
+        }
+        table {
+            border-collapse: collapse;
+            margin: 20px auto;
+            font-size: 14px;
+        }
+        table td {
+            border: 1px solid #bdc3c7;
+            padding: 10px;
+            text-align: center;
+            min-width: 80px;
+        }
+        .query-cell {
+            background-color: #e8f5e9;
+        }
+        .chunk-cell {
+            background-color: #fff3e0;
+        }
+        .result-cell {
+            background-color: #e3f2fd;
+            font-weight: bold;
+        }
+        .dimension {
+            color: #7f8c8d;
+            font-size: 12px;
+            font-style: italic;
+        }
+        .explanation {
+            background-color: #fff9c4;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 15px 0;
+            border-left: 4px solid #f39c12;
+        }
+        .step {
+            margin: 20px 0;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+        }
+        .step-number {
+            display: inline-block;
+            background-color: #3498db;
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 30px;
+            margin-right: 10px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Embedding Query和Chunk矩阵乘法详解</h1>
+        
+        <h2>1. 示例代码</h2>
+        <div class="code-block">
+sentences_1 = ["What is BGE M3?", "Defination of BM25"]  # Query
+sentences_2 = ["BGE M3 is an embedding model...", "BM25 is a bag-of-words..."]  # Chunk
+
+embeddings_1 = model.encode(sentences_1)['dense_vecs']  # Query embeddings
+embeddings_2 = model.encode(sentences_2)['dense_vecs']  # Chunk embeddings
+
+similarity = embeddings_1 @ embeddings_2.T  # 矩阵乘法
+        </div>
+
+        <h2>2. 矩阵维度说明</h2>
+        <div class="explanation">
+            <strong>BGE-M3模型的dense embedding维度：</strong> 1024维 (d = 1024)
+        </div>
+
+        <div class="step">
+            <span class="step-number">1</span>
+            <strong>Query Embeddings (embeddings_1)</strong>
+            <div class="dimension">形状: (2, 1024)</div>
+            <ul>
+                <li>2个query句子</li>
+                <li>每个句子编码为1024维向量</li>
+            </ul>
+        </div>
+
+        <div class="step">
+            <span class="step-number">2</span>
+            <strong>Chunk Embeddings (embeddings_2)</strong>
+            <div class="dimension">形状: (2, 1024)</div>
+            <ul>
+                <li>2个chunk文档</li>
+                <li>每个chunk编码为1024维向量</li>
+            </ul>
+        </div>
+
+        <div class="step">
+            <span class="step-number">3</span>
+            <strong>转置操作 (embeddings_2.T)</strong>
+            <div class="dimension">形状: (1024, 2)</div>
+            <ul>
+                <li>将chunk embeddings转置</li>
+                <li>从 (2, 1024) 变为 (1024, 2)</li>
+            </ul>
+        </div>
+
+        <h2>3. 矩阵乘法可视化</h2>
+        
+        <div class="matrix-container">
+            <div class="matrix">
+                <div class="matrix-label">embeddings_1<br/>(Query)</div>
+                <table>
+                    <tr>
+                        <td class="query-cell">q₁[0]</td>
+                        <td class="query-cell">q₁[1]</td>
+                        <td class="query-cell">...</td>
+                        <td class="query-cell">q₁[1023]</td>
+                    </tr>
+                    <tr>
+                        <td class="query-cell">q₂[0]</td>
+                        <td class="query-cell">q₂[1]</td>
+                        <td class="query-cell">...</td>
+                        <td class="query-cell">q₂[1023]</td>
+                    </tr>
+                </table>
+                <div class="dimension" style="text-align: center; margin-top: 5px;">(2 × 1024)</div>
+            </div>
+
+            <div style="font-size: 30px; font-weight: bold; color: #3498db;">@</div>
+
+            <div class="matrix">
+                <div class="matrix-label">embeddings_2.T<br/>(Chunk转置)</div>
+                <table>
+                    <tr>
+                        <td class="chunk-cell">c₁[0]</td>
+                        <td class="chunk-cell">c₂[0]</td>
+                    </tr>
+                    <tr>
+                        <td class="chunk-cell">c₁[1]</td>
+                        <td class="chunk-cell">c₂[1]</td>
+                    </tr>
+                    <tr>
+                        <td class="chunk-cell">...</td>
+                        <td class="chunk-cell">...</td>
+                    </tr>
+                    <tr>
+                        <td class="chunk-cell">c₁[1023]</td>
+                        <td class="chunk-cell">c₂[1023]</td>
+                    </tr>
+                </table>
+                <div class="dimension" style="text-align: center; margin-top: 5px;">(1024 × 2)</div>
+            </div>
+
+            <div style="font-size: 30px; font-weight: bold; color: #e74c3c;">=</div>
+
+            <div class="matrix">
+                <div class="matrix-label">similarity<br/>(相似度矩阵)</div>
+                <table>
+                    <tr>
+                        <td class="result-cell">sim(q₁, c₁)</td>
+                        <td class="result-cell">sim(q₁, c₂)</td>
+                    </tr>
+                    <tr>
+                        <td class="result-cell">sim(q₂, c₁)</td>
+                        <td class="result-cell">sim(q₂, c₂)</td>
+                    </tr>
+                </table>
+                <div class="dimension" style="text-align: center; margin-top: 5px;">(2 × 2)</div>
+            </div>
+        </div>
+
+        <h2>4. 矩阵乘法计算过程</h2>
+        <div class="explanation">
+            <strong>矩阵乘法公式：</strong><br/>
+            similarity[i, j] = Σ(k=0 to 1023) embeddings_1[i, k] × embeddings_2[j, k]
+        </div>
+
+        <div class="step">
+            <strong>具体计算示例：</strong>
+            <table style="margin-top: 15px;">
+                <tr>
+                    <td><strong>位置</strong></td>
+                    <td><strong>计算公式</strong></td>
+                    <td><strong>含义</strong></td>
+                </tr>
+                <tr>
+                    <td>similarity[0, 0]</td>
+                    <td>q₁ · c₁ = Σ q₁[k] × c₁[k]</td>
+                    <td>Query1与Chunk1的余弦相似度</td>
+                </tr>
+                <tr>
+                    <td>similarity[0, 1]</td>
+                    <td>q₁ · c₂ = Σ q₁[k] × c₂[k]</td>
+                    <td>Query1与Chunk2的余弦相似度</td>
+                </tr>
+                <tr>
+                    <td>similarity[1, 0]</td>
+                    <td>q₂ · c₁ = Σ q₂[k] × c₁[k]</td>
+                    <td>Query2与Chunk1的余弦相似度</td>
+                </tr>
+                <tr>
+                    <td>similarity[1, 1]</td>
+                    <td>q₂ · c₂ = Σ q₂[k] × c₂[k]</td>
+                    <td>Query2与Chunk2的余弦相似度</td>
+                </tr>
+            </table>
+        </div>
+
+        <h2>5. 实际结果</h2>
+        <div class="code-block">
+similarity = [[0.6265, 0.3477], 
+              [0.3499, 0.6780]]
+        </div>
+
+        <table style="margin: 20px auto;">
+            <tr>
+                <td></td>
+                <td class="chunk-cell"><strong>Chunk1</strong><br/>"BGE M3 is an embedding..."</td>
+                <td class="chunk-cell"><strong>Chunk2</strong><br/>"BM25 is a bag-of-words..."</td>
+            </tr>
+            <tr>
+                <td class="query-cell"><strong>Query1</strong><br/>"What is BGE M3?"</td>
+                <td class="result-cell">0.6265</td>
+                <td class="result-cell">0.3477</td>
+            </tr>
+            <tr>
+                <td class="query-cell"><strong>Query2</strong><br/>"Defination of BM25"</td>
+                <td class="result-cell">0.3499</td>
+                <td class="result-cell">0.6780</td>
+            </tr>
+        </table>
+
+        <div class="explanation">
+            <strong>结果解读：</strong><br/>
+            • Query1与Chunk1的相似度最高(0.6265)，说明"What is BGE M3?"与"BGE M3 is an embedding model..."最相关<br/>
+            • Query2与Chunk2的相似度最高(0.6780)，说明"Defination of BM25"与"BM25 is a bag-of-words..."最相关<br/>
+            • 这正是我们期望的结果！
+        </div>
+
+        <h2>6. 矩阵乘法流程图</h2>
+        <div class="mermaid">
+graph LR
+    A["sentences_1<br/>(2个Query)"] --> B["model.encode()"]
+    C["sentences_2<br/>(2个Chunk)"] --> D["model.encode()"]
+    B --> E["embeddings_1<br/>(2 × 1024)"]
+    D --> F["embeddings_2<br/>(2 × 1024)"]
+    F --> G["转置 .T"]
+    G --> H["embeddings_2.T<br/>(1024 × 2)"]
+    E --> I["矩阵乘法 @"]
+    H --> I
+    I --> J["similarity<br/>(2 × 2)<br/>相似度矩阵"]
+    J --> K["检索排序<br/>找到最相关的Chunk"]
+    style A fill:#e8f5e9
+    style C fill:#fff3e0
+    style E fill:#e8f5e9
+    style F fill:#fff3e0
+    style H fill:#fff3e0
+    style J fill:#e3f2fd
+        </div>
+
+        <h2>7. 向量点积计算细节</h2>
+        <div class="mermaid">
+graph TD
+    A["Query向量 q₁<br/>[q₁₀, q₁₁, q₁₂, ..., q₁₁₀₂₃]"] --> C["点积运算"]
+    B["Chunk向量 c₁<br/>[c₁₀, c₁₁, c₁₂, ..., c₁₁₀₂₃]"] --> C
+    C --> D["sim = q₁₀×c₁₀ + q₁₁×c₁₁ + ... + q₁₁₀₂₃×c₁₁₀₂₃"]
+    D --> E["相似度分数<br/>0.6265"]
+    style A fill:#e8f5e9
+    style B fill:#fff3e0
+    style E fill:#e3f2fd
+        </div>
+
+        <h2>8. 数学原理</h2>
+        <div class="step">
+            <strong>向量点积（内积）的几何意义：</strong>
+            <ul>
+                <li>两个向量的点积 = ||q|| × ||c|| × cos(θ)</li>
+                <li>其中θ是两向量之间的夹角</li>
+                <li>点积越大，夹角越小，相似度越高</li>
+            </ul>
+        </div>
+
+        <div class="step">
+            <strong>为什么使用转置？</strong>
+            <ul>
+                <li>embeddings_1形状: (2, 1024) - 2个query，每个1024维</li>
+                <li>embeddings_2形状: (2, 1024) - 2个chunk，每个1024维</li>
+                <li>转置后embeddings_2.T形状: (1024, 2)</li>
+                <li>矩阵乘法规则: (2, 1024) @ (1024, 2) = (2, 2)</li>
+                <li>结果矩阵的每个元素[i,j] = query[i]与chunk[j]的点积</li>
+            </ul>
+        </div>
+
+        <h2>9. SVG可视化：矩阵乘法过程</h2>
+        <svg width="100%" height="600" style="border: 1px solid #ddd; border-radius: 5px; background: #fafafa;">
+            <!-- Query矩阵 -->
+            <g transform="translate(50, 100)">
+                <rect x="0" y="0" width="200" height="80" fill="#e8f5e9" stroke="#4caf50" stroke-width="2" rx="5"/>
+                <text x="100" y="25" text-anchor="middle" font-weight="bold" font-size="14">embeddings_1 (Query)</text>
+                <text x="100" y="45" text-anchor="middle" font-size="12">(2 × 1024)</text>
+                <text x="100" y="65" text-anchor="middle" font-size="11" fill="#666">q₁, q₂</text>
+            </g>
+
+            <!-- 乘号 -->
+            <text x="300" y="140" font-size="40" fill="#3498db" font-weight="bold">@</text>
+
+            <!-- Chunk转置矩阵 -->
+            <g transform="translate(400, 100)">
+                <rect x="0" y="0" width="120" height="200" fill="#fff3e0" stroke="#ff9800" stroke-width="2" rx="5"/>
+                <text x="60" y="25" text-anchor="middle" font-weight="bold" font-size="14">embeddings_2.T</text>
+                <text x="60" y="45" text-anchor="middle" font-size="12">(1024 × 2)</text>
+                <text x="60" y="70" text-anchor="middle" font-size="11" fill="#666">c₁[0]</text>
+                <text x="60" y="90" text-anchor="middle" font-size="11" fill="#666">c₁[1]</text>
+                <text x="60" y="110" text-anchor="middle" font-size="11" fill="#666">...</text>
+                <text x="60" y="130" text-anchor="middle" font-size="11" fill="#666">c₁[1023]</text>
+                <text x="60" y="155" text-anchor="middle" font-size="11" fill="#666">c₂[0]</text>
+                <text x="60" y="175" text-anchor="middle" font-size="11" fill="#666">c₂[1]</text>
+                <text x="60" y="195" text-anchor="middle" font-size="11" fill="#666">...</text>
+            </g>
+
+            <!-- 等号 -->
+            <text x="580" y="140" font-size="40" fill="#e74c3c" font-weight="bold">=</text>
+
+            <!-- 结果矩阵 -->
+            <g transform="translate(650, 100)">
+                <rect x="0" y="0" width="150" height="80" fill="#e3f2fd" stroke="#2196f3" stroke-width="2" rx="5"/>
+                <text x="75" y="25" text-anchor="middle" font-weight="bold" font-size="14">similarity</text>
+                <text x="75" y="45" text-anchor="middle" font-size="12">(2 × 2)</text>
+                <text x="75" y="65" text-anchor="middle" font-size="11" fill="#666">相似度矩阵</text>
+            </g>
+
+            <!-- 箭头和说明 -->
+            <g transform="translate(50, 250)">
+                <line x1="0" y1="0" x2="0" y2="50" stroke="#666" stroke-width="2" marker-end="url(#arrowhead)"/>
+                <text x="10" y="35" font-size="12" fill="#666">2个query向量</text>
+            </g>
+
+            <g transform="translate(400, 250)">
+                <line x1="0" y1="0" x2="0" y2="50" stroke="#666" stroke-width="2" marker-end="url(#arrowhead)"/>
+                <text x="10" y="35" font-size="12" fill="#666">2个chunk向量(转置)</text>
+            </g>
+
+            <!-- 计算过程说明 -->
+            <g transform="translate(50, 350)">
+                <text x="0" y="0" font-size="16" font-weight="bold" fill="#2c3e50">计算过程：</text>
+                <text x="0" y="30" font-size="14" fill="#34495e">• similarity[0,0] = q₁ · c₁ = 0.6265</text>
+                <text x="0" y="55" font-size="14" fill="#34495e">• similarity[0,1] = q₁ · c₂ = 0.3477</text>
+                <text x="0" y="80" font-size="14" fill="#34495e">• similarity[1,0] = q₂ · c₁ = 0.3499</text>
+                <text x="0" y="105" font-size="14" fill="#34495e">• similarity[1,1] = q₂ · c₂ = 0.6780</text>
+            </g>
+
+            <!-- 箭头标记定义 -->
+            <defs>
+                <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+                    <polygon points="0 0, 10 3, 0 6" fill="#666"/>
+                </marker>
+            </defs>
+        </svg>
+
+        <div style="margin-top: 30px; padding: 15px; background-color: #e8f5e9; border-radius: 5px; border-left: 4px solid #4caf50;">
+            <strong>💡 关键理解：</strong><br/>
+            矩阵乘法 <code>embeddings_1 @ embeddings_2.T</code> 实际上是在计算所有query和chunk之间的成对相似度。
+            结果矩阵的每一行对应一个query，每一列对应一个chunk，矩阵元素的值就是它们之间的相似度分数。
+        </div>
+    </div>
+
+    <script>
+        mermaid.initialize({ startOnLoad: true, theme: 'default' });
+    </script>
+</body>
+</html>

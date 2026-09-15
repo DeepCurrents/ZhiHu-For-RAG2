@@ -1,0 +1,11 @@
+# ===== Python 缓存 =====
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+
+# ===== Jupyter 检查点（自动生成的临时文件） =====
+.ipynb_checkpoints/
+
+# ===== 日志（调试产物，不上传） =====
+*.log
