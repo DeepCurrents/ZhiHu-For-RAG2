@@ -1,1 +1,1 @@
-dashscope==1.22.1
+openai>=1.0.0

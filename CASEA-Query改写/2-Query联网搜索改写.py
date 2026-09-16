@@ -1,40 +1,76 @@
+# ============================================================================
+# Query 联网搜索改写：判断「要不要联网」+「怎么搜」
+#
+# 为什么需要它？
+#   不是所有问题都该走 RAG 知识库。像"明天园区天气怎么样""现在门票多少钱"
+#   这类问题，答案在向量库里根本不存在（因为它是随时间变化的），
+#   硬去检索只会召回到一堆过时或无关的内容，LLM 再拿着这些内容编答案。
+#   正确做法是：先判断该不该联网，该联网就把问题改写成「搜索引擎友好」的形式。
+#
+# 本脚本覆盖 4 个环节（每个环节对应一个方法）：
+#   1. identify_web_search_needs  —— 判断是否需要联网搜索
+#   2. rewrite_for_web_search     —— 把口语问题改写成检索式查询
+#   3. generate_search_strategy   —— 生成搜索关键词与平台/时间范围策略
+#   4. auto_web_search_rewrite    —— 串起前三步，供 RAG 流水线直接调用
+#
+# 在 RAG 链路中的位置：
+#   用户提问 → 【是否需要联网？】→ 需要 → 联网搜索 → 结果拼进 Prompt → LLM 生成
+#                              → 不需要 → 走本地向量库检索（见 1-Query改写.py）
+#
+# 接口说明：本脚本通过 agicto 聚合平台调用模型，使用 OpenAI 兼容协议。
+#   Base URL: https://api.agicto.cn/v1/
+#   需要环境变量 AGICTO_API_KEY（详见下方配置区）
+# ============================================================================
+
 # Query联网搜索改写功能
 # 导入依赖库
-import dashscope
+from openai import OpenAI
 import os
 import json
 import re
-from http import HTTPStatus
 from datetime import datetime
 
-# 从环境变量中获取 API Key
-dashscope.api_key = os.getenv('DASHSCOPE_API_KEY')
+# ---------------------------------------------------------------------------
+# 配置区：API Key 与模型名统一从环境变量读取，不硬编码在代码里（避免提交到 git 泄露）
+#
+# 运行前需先在服务器上配置：
+#   export AGICTO_API_KEY="sk-xxxxxxxx"
+# Key 去 https://agicto.com 控制台申请；模型名可在 https://agicto.com/model 查询
+#
+# 为什么用 OpenAI SDK？
+#   agicto 是聚合平台、走 OpenAI 兼容协议，和 DashScope 原生协议不通用，
+#   拿 agicto 的 Key 去调 dashscope SDK 会直接鉴权失败。
+# ---------------------------------------------------------------------------
+AGICTO_API_KEY = os.getenv('AGICTO_API_KEY')
+AGICTO_BASE_URL = os.getenv('AGICTO_BASE_URL', 'https://api.agicto.cn/v1/')
+CHAT_MODEL = os.getenv('AGICTO_CHAT_MODEL', 'gpt-4o-mini')
+
+# fail-fast 校验：没配 Key 就直接抛错，而不是等到调用时才报奇怪的错
+if not AGICTO_API_KEY:
+    raise ValueError("请设置环境变量 AGICTO_API_KEY")
+
+# OpenAI 兼容客户端：把 base_url 指向 agicto 即可，其余用法和调 OpenAI 完全一致
+client = OpenAI(api_key=AGICTO_API_KEY, base_url=AGICTO_BASE_URL)
 
 # 基于 prompt 生成文本
-def get_completion(prompt, model="qwen-turbo-latest"):
+# 不传 model 时用配置区里的默认模型；temperature=0 保证判断结果稳定可复现
+def get_completion(prompt, model=None):
     messages = [{"role": "user", "content": prompt}]
-    response = dashscope.Generation.call(
-        model=model,
+    response = client.chat.completions.create(
+        model=model or CHAT_MODEL,
         messages=messages,
-        result_format='message',
         temperature=0,
     )
-    # 失败时 output 可能为 None（如未配置 API Key、HTTP 非 200），需先校验再取 choices
-    if response.status_code != HTTPStatus.OK:
-        raise RuntimeError(
-            f"DashScope 调用失败: HTTP {response.status_code}, "
-            f"code={response.code}, message={response.message}"
-        )
-    out = response.output
-    if out is None or not getattr(out, "choices", None):
-        raise RuntimeError(
-            f"DashScope 未返回生成内容: code={response.code}, message={response.message}"
-        )
-    return out.choices[0].message.content
+    # openai SDK 失败时会直接抛异常，不像 DashScope SDK 那样静默塞进 status_code，
+    # 所以这里只需要防一手「接口通了、choices 却为空」的边界情况
+    if not response.choices:
+        raise RuntimeError(f"agicto 未返回生成内容: {response}")
+    return response.choices[0].message.content
 
 class WebSearchQueryRewriter:
-    def __init__(self, model="qwen-turbo-latest"):
-        self.model = model
+    # 不传 model 时使用配置文件里的默认模型 CHAT_MODEL
+    def __init__(self, model=None):
+        self.model = model or CHAT_MODEL
     
     def identify_web_search_needs(self, query, conversation_history=""):
         """识别查询是否需要联网搜索"""
